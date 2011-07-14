@@ -1,0 +1,30 @@
+#!/bin/bash
+
+#
+# Create a new directory, init a git svn repository. Opens the checkout in $EDITOR.
+#
+# If the repository is a rails application, opens the database.yml as well.
+#
+
+if [ $# -ne 1 ]; then
+  script=`basename $0`
+  echo "usage: ./${script} repository_name"
+  echo "Creates a new directory and initializes a new git svn repository."
+  exit 1
+fi
+repo=$1
+dir=`basename ${repo}`
+editor=$EDITOR || 'mate'
+
+mkdir ${dir} && cd ${dir} && git svn init -s ${repo} && git svn fetch
+if [ ! -e config/database.yml ] && [ -e config/database.example.yml ]; then
+  cp config/database.example.yml config/database.yml
+fi
+if [ -e config/database.yml ]; then
+  echo ""
+  echo "====================================="
+  echo "After editing your database.yml, run any required setup commands such as `bundle install`."
+  ${editor} . && ${editor} config/database.yml
+else
+  ${editor} .
+fi

@@ -1,0 +1,15 @@
+== nbrew-Binfiles
+
+=== Description
+
+A repository for various scripts in my ~/bin directory.
+
+Scripts:
+
+* create_deployment_user.sh
+  Creates a new user, and optionally a new group, and generates ssh keys for that user.
+* git-create-branch
+  Adds a remote branch to the current git repository.
+* gitsco
+  Lazy method for checking out a svn repository via git. Creates a new directory,
+  inits the git-svn repository, fetches the changes and opens the project with $EDITOR.
