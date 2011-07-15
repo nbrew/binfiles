@@ -1,0 +1,12 @@
+#!/bin/bash
+
+function gitorsvn() {
+  local git=`which git`
+  svn_remote=''
+  # use `echo -n` if you don't want the ending newline
+  if [ -d `pwd`/.svn ]; then echo 'svn'; elif [ -d `pwd`/.git ]; then svn_remote=`${git} config --get svn-remote.svn.url`; if [ $? -ne "0" ]; then echo 'git'; else echo 'git-svn'; fi fi
+}
+
+gitorsvn
+
+exit 0
