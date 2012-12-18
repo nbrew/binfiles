@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Logs comments with a datestamp to a log.
+
+# usage: tc 'JOBNUM|TASK|Comment goes here'
+#        >> 2012-12-14 14:46:08 | JOBNUM|TASK|Comment goes here
+
+for msg in "$@"
+do
+  DATE=`date +'%Y-%m-%d %H:%M:%S'` && echo "$DATE | $msg" >> ~/Documents/timecard.txt
+done
+
+exit
