@@ -1,0 +1,199 @@
+#!/usr/local/bin/ruby
+
+require 'optparse'
+require 'ostruct'
+require 'rubygems'
+require 'open-uri'
+require 'hpricot'
+
+version_info = <<EOV
+keyword_density v0.01
+
+Generates a short keyword density report.
+
+Author: Nathan Hyde <nhyde@bigdrift.com>
+
+EOV
+
+options = OpenStruct.new
+options.url = ''
+options.include_title = false
+options.exit_now = false
+
+# http://ruby.about.com/od/scripting/a/commandline_arg_2.htm
+opts = OptionParser.new do |opts|
+  opts.on('-u', '--url [full url to page]',
+    'The full url to the page to check the density.'
+  ) do |u|
+    options.url = u
+  end
+  opts.on('-n', '--number-words',
+    'Number of words that make up a phrase. Default: 2'
+  ) do |n|
+    options.number_words = n || 2
+  end
+  opts.on('-t', '--include-title',
+    'Include the page TITLE in the density count. Default: do not include the title.'
+  ) do |t|
+    options.include_title = true
+  end
+
+  opts.on('-v', '--version',
+    'List version number of script.'
+  ) do |v|
+    puts version_info
+    options.exit_now = true
+  end
+
+  opts.on_tail('-h', '--help',
+    'Show this usage statement'
+  ) do |h|
+    puts opts
+    options.exit_now = true
+  end
+
+end
+
+if ARGV.empty?
+  puts opts
+  exit
+elsif !ARGV[0].match(/^-/)
+  options.url = ARGV.shift
+  puts "Set URL to #{options.url}"
+end
+
+options.number_words = 2 unless !options.number_words.nil? && options.number_words.gsub(/^\d$/)
+
+begin
+  opts.parse!(ARGV)
+rescue Exception => e
+  puts e, "", opts
+  exit
+end
+
+exit if options.exit_now
+
+# @url = 'http://localhost:3000/about/merchandising'
+@response = ''
+
+# for all anchors in the body: /html/body//a
+# to_crawl = []
+# doc.search('/html/body//a').each do |l|
+#   to_crawl << l.attributes['href'] unless to_crawl.include?(l.attributes['href'])
+# end
+
+class KeywordTerm
+  attr_accessor :term
+  attr_reader :count
+
+  def initialize(term)
+    @term = term
+    @count ||= 0
+    increment_count
+  end
+
+  def increment_count
+    @count = @count + 1
+  end
+end
+class Float
+  def prec(x)
+    ("%.0#{x.to_i}f" % self).to_f
+  end
+end
+
+class KeywordDensity
+  attr_accessor :phrases
+  attr_accessor :num_terms
+  attr_reader :total_words
+  attr_reader :url
+
+  def initialize(*args)
+    @url = args.shift
+    @options = args.last.is_a?(::Hash) ? args.pop : {}
+    @phrases = @options.has_key?(:phrases) ? @options[:phrases] : {}
+    @num_terms = @options.has_key?(:num_terms) ? @options[:num_terms].to_i - 1 : 24
+    @total_words = 0
+  end
+
+  def process
+    # open-uri RDoc: http://stdlib.rubyonrails.org/libdoc/open-uri/rdoc/index.html
+    doc = open(@url) { |f| Hpricot(f) }
+    process_words(doc.search('/html/head//title').to_s.gsub(/\s+/,' ').split(' ')) if @options[:include_title]
+    # include title attributes of anchors as google appears to see them as valid content
+    # doc.search('/html/body//a[@title]').collect { |e|
+    #   process_words(
+    #     e.attributes['title'].split(' ')
+    #   )
+    # }
+    process_words(doc.search('/html//body').to_s.gsub(/<\/?[^>]*>/, "").gsub(/\s+/,' ').split(' '))
+  end
+
+  def report
+    phrases_array=@phrases.to_a.sort{|a,b| b[1].count <=> a[1].count}
+    puts "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
+    puts "#{'Term'.center(32)}|#{'Count'.center(7)}| Density"
+    puts "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
+    for i in 0..@num_terms.to_i
+      str = "#{phrases_array[i][1].term.ljust(30)}  |"
+      str << "#{phrases_array[i][1].count.to_s.center(7)}|  "
+      str << "#{(phrases_array[i][1].count*@options[:number_words]/@total_words.to_f * 100).prec(2)}%"
+      puts str
+    end
+    puts "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-="
+    puts "Total Words: #{total_words}"
+  end
+
+  def process_words(words)
+    @total_words = @total_words + words.size
+    words.each_with_index do |word, index|
+      phrase = nil
+      forward = backward = ''
+      (@options[:number_words]).times do |n|
+        forward = false unless words[index+n]
+        forward << " #{words[index+n]}" unless forward == false
+      end
+      unless forward
+        @options[:number_words].downto(0) do |n|
+          backward = false unless words[index-n]
+          backward << " #{words[index-n].downcase}"
+        end
+      end
+      phrase = forward || backward
+      unless phrase.nil?
+        phrase.downcase!
+        if @phrases.has_key?(phrase.to_sym)
+          @phrases[phrase.to_sym].increment_count
+        else
+          @phrases[phrase.to_sym] = KeywordTerm.new(phrase)
+        end
+      end
+    end
+  end
+  #
+  # private
+  # def process_words(words)
+  #   @total_words = @total_words + words.size
+  #   words.each_with_index do |word, index|
+  #     phrase = nil
+  #     if words[index+1]
+  #       # 2 word combos
+  #       phrase = (word + ' ' + words[index+1]).downcase
+  #     elsif words[index-1]
+  #       phrase = (words[index-1] + ' ' + word).downcase
+  #     end
+  #     unless phrase.nil?
+  #       if @phrases.has_key?(phrase.to_sym)
+  #         @phrases[phrase.to_sym].increment_count
+  #       else
+  #         @phrases[phrase.to_sym] = KeywordTerm.new(phrase)
+  #       end
+  #     end
+  #   end
+  # end
+
+end
+
+k = KeywordDensity.new(options.url, { :include_title => options.include_title, :number_words => options.number_words })
+k.process
+k.report
